@@ -1,24 +1,3 @@
-# Data cleaning and processing can be done in multiple steps that involve
-# 1. Sentence, word Tokenization
-# 2. Expanding the contractions (we'll--> we will) This helps alot in many cases of similarity
-# 3. Removing common/custom stop words
-# 4. Removing punctuations
-# 5. Stemming/Lemmatization (Not performed due to restrictions)
-# 6. Building custom Vocabulary
-# 7. Creating N-Grams (Only unigrams are considered here for simplicity)
-# 8. Vectorization of texts to numbers to get TF-IDF features.
-#
-# Once the words are converted to vectors, maths should do the job for us to get similarity between the vectors.
-# In this module, following 3 different and basic approaches to find the similarity are implemented:
-# 1. Cosine Similarity
-# 2. Jaccard Index Similarity
-# 3. Euclidian Diatance Similarity
-#
-# As this is a reusable module, it is scaled to take muliple texts(even more than 3) at a time to compare.
-# The similarity method can be chosen along with choice of removal of punctuations and stop words via input args.
-
-
-# Initial Imports
 import numpy as np
 import re
 from math import *
@@ -32,15 +11,10 @@ from nltk.corpus import stopwords
 import pymorphy2
 from collections import Counter
 
-# Data Cleaning
-# Here we can add the custom stop words and punctuations to give importance to certain ones.
-# I have selected a few based default text examples.
 stop_words_ru = set(stopwords.words('russian'))
 # stop_words_en = set(stopwords.words('english'))
 punctuations_marks = ['.', ':', ',', '!', ';', '\'', '\"', '(', ')']
 
-
-# Sentence and word Tokenization. Punctuation and stop word removal is optional that are performed along with this.
 def tokenize_sentences(text, stop_char="."):
     return [x.lower() + ' ' + stop_char + '' for x in text.split(stop_char) if x != ""]
 
@@ -69,9 +43,6 @@ def deconstruction_en_words(text):
     return text
 
 
-# Considering all the separate texts contribute to our entire vocabulary/corpus, the vocabulary is created.
-# Along with vocabulary, count of individual words in corpus is stored.
-# The 2 dictionaries int_to_vocab and vocab_t_int comes in handy while vectorizing the words.
 def prepare_vocab(all_words):
     word_counts = Counter([word for text in all_words for word in text])
     sorted_vocab = sorted(word_counts, key=word_counts.get, reverse=True)
@@ -81,7 +52,6 @@ def prepare_vocab(all_words):
     return word_counts, sorted_vocab, int_to_vocab, vocab_to_int
 
 
-# This function gives Terf frequency for each text separately.
 def get_word_tf(sorted_vocab, vocab_to_int, words):
     word_tf = np.zeros(len(sorted_vocab), dtype=float)
     for word, count in Counter(words).items():
@@ -90,9 +60,6 @@ def get_word_tf(sorted_vocab, vocab_to_int, words):
     return word_tf
 
 
-# This function computes Inverse Document Frequency for each word in our vocabulay. Thus, all the words hav distinct
-# IDF. Generally, the log of IDF i spreferred but for this simple implementation it is neglected. Can be added for
-# improvements.
 def get_word_idf(all_words, n_texts, sorted_vocab, vocab_to_int):
     word_idf = np.zeros(len(sorted_vocab), dtype=float)
     for word in sorted_vocab:
@@ -105,31 +72,26 @@ def get_word_idf(all_words, n_texts, sorted_vocab, vocab_to_int):
     return word_idf
 
 
-# This functions gives the TF-IDF vectors for our corpus.
 def get_tfidf_vectors(word_tf, word_idf):
     return [tf * idf for tf, idf in zip(word_tf, word_idf)]
 
 
-# Helper function to compute square root rounded upto 3 decimals
 def square_rooted(x):
     return round(sqrt(sum([a * a for a in x])), 3)
 
 
-# This function computes the cosine angle(similarity) between given 2 input word vectors.
 def get_cosine_similarity(x, y):
     numerator = sum(a * b for a, b in zip(x, y))
     denominator = square_rooted(x) * square_rooted(y)
     return round(numerator / float(denominator), 3)
 
 
-# This is the function which implements and performs all the above processes with respect to input arguments.
 def get_text_similarity(texts, method="cosine", exclude_stopwords=False, exclude_punctuation=False):
 
-    n_texts = len(texts)  # Total texts to compare. Need atleast 2.
+    n_texts = len(texts)  
     if n_texts < 2:
         return
 
-    # Matrix to store similarity between each individual text with another.
     sim_matrix = [[0 if i != j else 1 for j in range(n_texts)] for i in range(n_texts)]
     # Check for exact similarity. The exact similar texts can be directly marked as 1 to avoid further computation.
     n_similar = 0
@@ -140,33 +102,22 @@ def get_text_similarity(texts, method="cosine", exclude_stopwords=False, exclude
                 n_similar += 1
             else:
                 pass
-    # If all texts are similar, return
     if n_similar == n_texts - 1:
         return sim_matrix
 
-    # Tokenize the words from texts and store in list.
     tokenized_stop_words = stop_words_ru if exclude_stopwords else []
     punctuations = punctuations_marks if exclude_punctuation else []
     all_words = [tokenize_words_from_sent(tokenize_sentences(deconstruction_en_words(text)),
                                           tokenized_stop_words, punctuations) for text in texts]
 
-    # If other methods(word-vector based) are needed, prepare the data
-    # The data is prepared assuming all the texts are part of the same vocabulary,
-    # And thus there will be 'n_texts' documents in our corpus
     word_counts, sorted_vocab, int_to_vocab, vocab_to_int = prepare_vocab(all_words)
-    #     print(word_counts,"\n*********************\n",sorted_vocab,"\n*********************\n",int_to_vocab,
-    #           "\n*********************\n",vocab_to_int)
 
-    # Calculate Word term frequencies
     word_tfs = [get_word_tf(sorted_vocab, vocab_to_int, words) for words in all_words]
 
-    # Calculate Inverse Document frequencies for all words
     word_idf = get_word_idf(all_words, n_texts, sorted_vocab, vocab_to_int)
 
-    # Create TF-IDF Vectors
     tfidf_vec = [get_tfidf_vectors(word_tf, word_idf) for word_tf in word_tfs]
 
-    # Based on method, return the calculated similarity matrix
     if method == "cosine":
         for i in range(n_texts):
             for j in range(i + 1, n_texts):
